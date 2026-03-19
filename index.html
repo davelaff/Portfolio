@@ -185,7 +185,7 @@ const overlay = document.getElementById('message-overlay');
 const startBtn = document.getElementById('start-btn');
 
 // ── Sizing ──
-const SIZE = Math.min(window.innerWidth - 40, window.innerHeight - 160, 700);
+const SIZE = Math.min(window.innerWidth - 40, window.innerHeight - 160, 900);
 canvas.width = SIZE;
 canvas.height = SIZE;
 const CX = SIZE / 2;
@@ -629,7 +629,7 @@ function update() {
       if (m.active && !m.inRing) {
         // Check if it was previously in the ring (just knocked out)
         const dist = Math.sqrt((m.x - CX) ** 2 + (m.y - CY) ** 2);
-        if (dist > RING_RADIUS + m.radius * 5) {
+        if (dist > RING_RADIUS + m.radius * 2) {
           m.active = false;
           scores[currentPlayer]++;
           knockedOutThisTurn++;
