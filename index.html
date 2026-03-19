@@ -190,15 +190,15 @@ canvas.width = SIZE;
 canvas.height = SIZE;
 const CX = SIZE / 2;
 const CY = SIZE / 2;
-const RING_RADIUS = SIZE * 0.32;
+const RING_RADIUS = SIZE * 0.38;
 
 // ── Physics constants ──
-const FRICTION = 0.985;
+const FRICTION = 0.975;
 const MIN_SPEED = 0.15;
-const MAX_POWER = 22;
+const MAX_POWER = 18;
 const MARBLE_RADIUS = SIZE * 0.018;
 const SHOOTER_RADIUS = MARBLE_RADIUS * 1.4;
-const RESTITUTION = 0.92;
+const RESTITUTION = 0.78;
 const SUBSTEPS = 3;
 
 // ── Marble colors ──
@@ -629,7 +629,7 @@ function update() {
       if (m.active && !m.inRing) {
         // Check if it was previously in the ring (just knocked out)
         const dist = Math.sqrt((m.x - CX) ** 2 + (m.y - CY) ** 2);
-        if (dist > RING_RADIUS + m.radius * 2) {
+        if (dist > RING_RADIUS + m.radius * 5) {
           m.active = false;
           scores[currentPlayer]++;
           knockedOutThisTurn++;
