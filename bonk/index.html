@@ -191,7 +191,9 @@
   let shake = 0;
   let running = false;
   let score = 0, bonks = 0, timeLeft = ROUND;
-  let best = +(localStorage.getItem(BEST_KEY) || 0);
+  function safeGet(k){ try{ return localStorage.getItem(k); }catch(e){ return null; } }
+  function safeSet(k,v){ try{ localStorage.setItem(k,v); }catch(e){} }
+  let best = +(safeGet(BEST_KEY) || 0);
   let lastTs = 0, spawnTimer = 0, spawnGap = 0.85, roundClock = 0;
   bestEl.textContent = best;
 
@@ -276,7 +278,7 @@
     finalScoreEl.textContent=score;
     finalBonksEl.textContent=bonks;
     const isBest = score>best;
-    if(isBest){ best=score; localStorage.setItem(BEST_KEY,best); bestEl.textContent=best; }
+    if(isBest){ best=score; safeSet(BEST_KEY,best); bestEl.textContent=best; }
     newBestEl.style.visibility = isBest && score>0 ? 'visible':'hidden';
     endScreen.classList.remove('hidden');
     beep('end');
