@@ -59,6 +59,13 @@
     font-size:.68rem;font-weight:800;letter-spacing:.14em;text-transform:uppercase;
     color:var(--ink);text-shadow:0 1px 2px rgba(0,0,0,.5);font-variant-numeric:tabular-nums;
   }
+  /* ---------- lives ---------- */
+  .lives{flex:0 0 auto;display:flex;gap:.4rem;justify-content:center;align-items:center;height:1.2rem;margin:0 0 .35rem;}
+  .heart{font-size:1.1rem;line-height:1;transition:transform .15s ease;}
+  .heart.on{color:var(--magenta);text-shadow:0 0 9px rgba(255,46,136,.7);}
+  .heart.off{color:rgba(255,255,255,.22);text-shadow:none;}
+  .heart.lost{animation:hbreak .4s ease;}
+  @keyframes hbreak{0%{transform:scale(1.5);}100%{transform:scale(1);}}
 
   /* ---------- stage ---------- */
   .stage{flex:1 1 auto;position:relative;min-height:0;}
@@ -143,6 +150,7 @@
     <div class="stat score right"><span class="label">Score</span><span class="value" id="score">0</span></div>
   </div>
   <div class="progress"><div class="fill" id="qfill"></div><span class="qtext" id="qtext">0 / 11</span></div>
+  <div class="lives" id="lives" aria-label="lives"></div>
 
   <div class="stage" id="stage">
     <canvas id="c"></canvas>
@@ -152,11 +160,12 @@
     <div class="overlay" id="startScreen">
       <h1 class="title">BONK!</h1>
       <p class="tagline"><b>Fill the bar</b> before the timer runs out to clear each level.
-         Every level adds holes and new colors — all safe to bonk.
-         Only the <span class="bad">purple bombs</span> hurt you.</p>
+         Bonk any color for points, and grab the <span style="color:var(--gold)">golden stars</span> for +5.
+         Dodge the <span class="bad">purple bombs</span> — each one costs a life, and you only get three.</p>
       <div class="legend">
-        <span><i class="dot good"></i>bonk for points</span>
-        <span><i class="dot bomb"></i>bomb — avoid!</span>
+        <span><i class="dot good"></i>+1</span>
+        <span><i class="dot multi"></i>star +5</span>
+        <span><i class="dot bomb"></i>bomb &minus;1 &hearts;</span>
       </div>
       <button class="btn" id="startBtn">Play</button>
     </div>
@@ -181,7 +190,7 @@
   const $ = id=>document.getElementById(id);
   const cv=$('c'), ctx=cv.getContext('2d'), stage=$('stage');
   const scoreEl=$('score'), timeEl=$('time'), levelEl=$('level'), ringEl=$('timeRing');
-  const qfill=$('qfill'), qtext=$('qtext');
+  const qfill=$('qfill'), qtext=$('qtext'), livesEl=$('lives');
   const startScreen=$('startScreen'), endScreen=$('endScreen'), banner=$('banner');
   const bannerBig=$('bannerBig'), bannerSub=$('bannerSub');
   const startBtn=$('startBtn'), againBtn=$('againBtn');
@@ -193,8 +202,9 @@
   const COLORS={
     green:['#7bffb0','#20b866'], cyan:['#8ef0ff','#17a7c4'], gold:['#ffe27a','#e0a500'],
     orange:['#ffc08a','#e86a1c'], pink:['#ffb3d1','#e83a86'], blue:['#a9c0ff','#3a5edb'],
-    bomb:['#9a5bff','#4b16a8']
+    bomb:['#9a5bff','#4b16a8'], bonus:['#ffe9a3','#ffb300']
   };
+  const MAXLIVES=3;
   // hole layouts by count (normalized playfield coords)
   const LAYOUTS={
     5:[[.24,.34],[.76,.34],[.50,.56],[.24,.78],[.76,.78]],
@@ -231,7 +241,7 @@
   let holes=[], balls=[], particles=[], floaters=[];
   let shake=0, phase='menu';           // menu | play | clear | over
   let level=1, cfg=levelConfig(1);
-  let score=0, levelProgress=0, quota=cfg.quota, timeLeft=cfg.time;
+  let score=0, levelProgress=0, quota=cfg.quota, timeLeft=cfg.time, lives=MAXLIVES;
   let best=+(safeGet(BEST_KEY)||0);
   let lastTs=0, spawnTimer=0, clearTimer=0;
 
@@ -249,6 +259,7 @@
     const a=ac(); if(!a) return; const t=a.currentTime;
     if(kind==='bonk') tone(680,160,t,.13,'square',.26);
     else if(kind==='bomb') tone(180,40,t,.38,'sawtooth',.34);
+    else if(kind==='bonus'){ [880,1175,1568].forEach((f,i)=>tone(f,f,t+i*.05,.12,'triangle',.26)); }
     else if(kind==='level'){ [523,659,784,1047].forEach((f,i)=>tone(f,f,t+i*.09,.16,'triangle',.24)); }
     else if(kind==='over') [660,494,392,294].forEach((f,i)=>tone(f,f,t+i*.13,.22,'triangle',.22));
   }
@@ -271,7 +282,7 @@
   /* ---------------- flow ---------------- */
   function start(){
     ac(); if(AC&&AC.state==='suspended') AC.resume();
-    score=0; level=1;
+    score=0; level=1; lives=MAXLIVES;
     startScreen.classList.add('hidden'); endScreen.classList.add('hidden');
     startLevel(1);
     lastTs=0; requestAnimationFrame(loop);
@@ -286,16 +297,19 @@
   }
   function clearLevel(){
     phase='clear'; clearTimer=1.4;
-    const bonus=Math.ceil(timeLeft); score+=bonus; updateHUD();
+    const bonus=Math.ceil(timeLeft); score+=bonus;
+    const gainedLife = lives<MAXLIVES;
+    if(gainedLife) lives++;
+    updateHUD();
     balls.forEach(b=>b.target=0);
     bannerBig.textContent='Level '+level+' Clear!';
     const next=levelConfig(level+1);
     let tease='';
     if(next.holes>cfg.holes) tease=next.holes+' holes next';
     else if(next.colors.length>cfg.colors.length) tease='new color unlocked';
-    else if(next.multi>cfg.multi) tease='double pop-ups!';
-    else tease='keep going';
-    bannerSub.innerHTML='+<b>'+bonus+'</b> time bonus · '+tease;
+    else if(next.multi>cfg.multi) tease='triple pop-ups!';
+    else tease='faster & tougher';
+    bannerSub.innerHTML='+<b>'+bonus+'</b> time bonus'+(gainedLife?' · +1 &hearts;':'')+' · '+tease;
     banner.classList.add('show');
     beep('level'); buzz([20,40,20]);
   }
@@ -313,6 +327,13 @@
     const frac=Math.min(1,levelProgress/quota);
     qfill.style.width=(frac*100)+'%';
     qtext.textContent=levelProgress+' / '+quota;
+    renderLives();
+  }
+  function renderLives(){
+    let s='';
+    for(let i=0;i<MAXLIVES;i++)
+      s+='<span class="heart '+(i<lives?'on':'off')+'">'+(i<lives?'♥':'♡')+'</span>';
+    livesEl.innerHTML=s;
   }
   function setRing(f){ ringEl.style.strokeDashoffset=String(RING_LEN*(1-f)); }
 
@@ -333,11 +354,13 @@
     const sizef = group>1?0.6:0.82;
     for(let s=0;s<group;s++){
       const isBomb=(s===bombSlot);
+      const isBonus=!isBomb && level>=2 && Math.random()<0.07;
+      const type=isBomb?'bomb':(isBonus?'bonus':'good');
       balls.push({
-        hole:hi, type:isBomb?'bomb':'good',
-        color:isBomb?'bomb':cfg.colors[(Math.random()*cfg.colors.length)|0],
+        hole:hi, type,
+        color: type==='good' ? cfg.colors[(Math.random()*cfg.colors.length)|0] : type,
         rise:0, target:1, squash:0, hitFlash:0,
-        life:(isBomb?1.5:1.15)*cfg.lifeMul + Math.random()*0.2,
+        life:(isBomb?1.5:isBonus?0.95:1.15)*cfg.lifeMul + Math.random()*0.2,
         dxf:off[s], sizef
       });
     }
@@ -364,23 +387,39 @@
   function bonk(b){
     const h=holes[b.hole];
     const cx=h.x+b.dxf*h.r, cy=h.y-b.rise*h.r*1.15;
-    if(b.type==='good'){
-      score++; levelProgress++;
-      floaters.push({x:cx,y:cy-h.r*0.4,text:'+1',color:'#ffcc33',life:1});
-      burst(cx,cy,18,COLORS[b.color][0],3.2);
-      b.squash=1; b.hitFlash=1; b.target=0; beep('bonk'); buzz(12);
-      updateHUD();
-      if(levelProgress>=quota) clearLevel();
-    } else {
-      score=Math.max(0,score-3); levelProgress=Math.max(0,levelProgress-2);
-      floaters.push({x:cx,y:cy-h.r*0.4,text:'-3',color:'#ff2e88',life:1});
+    if(b.type==='bomb'){
+      levelProgress=Math.max(0,levelProgress-2);
+      lives--;
+      floaters.push({x:cx,y:cy-h.r*0.4,text:'-1 ♥',color:'#ff2e88',life:1});
       burst(cx,cy,26,'#7b2ff7',4.5); burst(cx,cy,14,'#ff2e88',5);
-      shake=Math.min(1,shake+0.9); b.squash=1; b.target=0;
-      beep('bomb'); buzz([40,30,60]); updateHUD();
+      shake=Math.min(1,shake+1); b.squash=1; b.target=0;
+      beep('bomb'); buzz([60,40,80]); updateHUD();
+      const pip=livesEl.children[lives]; if(pip) pip.classList.add('lost');
+      if(lives<=0){ gameOver(); }
+      return;
     }
+    const pts = b.type==='bonus'?5:1;
+    score+=pts; levelProgress+=pts;
+    floaters.push({x:cx,y:cy-h.r*0.5,text:'+'+pts,color:b.type==='bonus'?'#ffb300':'#ffcc33',life:1});
+    burst(cx,cy, b.type==='bonus'?30:18, COLORS[b.color][0], b.type==='bonus'?4:3.2);
+    if(b.type==='bonus') burst(cx,cy,16,'#fff3b0',5);
+    b.squash=1; b.hitFlash=1; b.target=0;
+    beep(b.type==='bonus'?'bonus':'bonk'); buzz(b.type==='bonus'?[15,25,15]:12);
+    updateHUD();
+    if(levelProgress>=quota) clearLevel();
   }
 
   /* ---------------- particles ---------------- */
+  function starPath(cx,cy,spikes,outer,inner){
+    ctx.beginPath();
+    let rot=-Math.PI/2; const step=Math.PI/spikes;
+    ctx.moveTo(cx+Math.cos(rot)*outer, cy+Math.sin(rot)*outer);
+    for(let i=0;i<spikes;i++){
+      rot+=step; ctx.lineTo(cx+Math.cos(rot)*inner, cy+Math.sin(rot)*inner);
+      rot+=step; ctx.lineTo(cx+Math.cos(rot)*outer, cy+Math.sin(rot)*outer);
+    }
+    ctx.closePath();
+  }
   function burst(x,y,n,color,spd){
     for(let i=0;i<n;i++){
       const a=Math.random()*Math.PI*2, s=(0.4+Math.random())*spd*60;
@@ -468,12 +507,23 @@
     ctx.beginPath(); ctx.rect(cx-r*1.3,0,r*2.6,h.y+r*0.5); ctx.clip();
     const squash=b.squash, bodyR=r*b.sizef;
     ctx.translate(cx,cy); ctx.scale(1+squash*0.35, 1-squash*0.4);
-    const isBomb=b.type==='bomb';
-    const pal=COLORS[isBomb?'bomb':b.color];
+    const isBomb=b.type==='bomb', isBonus=b.type==='bonus';
+    const pal=COLORS[b.color];
     const g=ctx.createRadialGradient(-bodyR*0.3,-bodyR*0.4,bodyR*0.2,0,0,bodyR);
     g.addColorStop(0,pal[0]); g.addColorStop(1,pal[1]);
     ctx.fillStyle=g; ctx.beginPath(); ctx.arc(0,0,bodyR,0,7); ctx.fill();
     if(b.hitFlash>0){ ctx.globalAlpha=b.hitFlash*0.7; ctx.fillStyle='#fff'; ctx.beginPath(); ctx.arc(0,0,bodyR,0,7); ctx.fill(); ctx.globalAlpha=1; }
+    if(isBonus){
+      const pulse=0.5+0.5*Math.sin(performance.now()/140);
+      ctx.globalAlpha=0.35+0.45*pulse; ctx.strokeStyle='#fff3b0'; ctx.lineWidth=bodyR*0.13;
+      ctx.beginPath(); ctx.arc(0,0,bodyR*1.14,0,7); ctx.stroke(); ctx.globalAlpha=1;
+      starPath(0,-bodyR*0.05,5,bodyR*0.64,bodyR*0.28);
+      ctx.fillStyle='#fff8dc'; ctx.fill();
+      ctx.lineWidth=bodyR*0.07; ctx.strokeStyle='#e0940a'; ctx.stroke();
+      ctx.fillStyle='#7a4a00';
+      ctx.beginPath(); ctx.arc(-bodyR*0.15,-bodyR*0.02,bodyR*0.06,0,7); ctx.arc(bodyR*0.15,-bodyR*0.02,bodyR*0.06,0,7); ctx.fill();
+      ctx.restore(); return;
+    }
     if(isBomb){
       ctx.strokeStyle='#2a123f'; ctx.lineWidth=bodyR*0.12; ctx.lineCap='round';
       ctx.beginPath(); ctx.moveTo(0,-bodyR*0.9); ctx.quadraticCurveTo(bodyR*0.35,-bodyR*1.3,bodyR*0.1,-bodyR*1.5); ctx.stroke();
@@ -516,6 +566,15 @@
   }
 
   levelEl.textContent='1'; scoreEl.textContent='0'; timeEl.textContent=cfg.time; qtext.textContent='0 / '+cfg.quota;
+  renderLives();
   resize(); requestAnimationFrame(idle);
+
+  // test hook (only active with ?debug in the URL — no effect on normal play)
+  if(location.search.indexOf('debug')>=0){
+    window.__bonk={
+      balls:()=>balls.map(b=>{const h=holes[b.hole];return{type:b.type,rise:b.rise,x:h.x+b.dxf*h.r,y:h.y-b.rise*h.r*1.15};}),
+      state:()=>({phase,level,lives,score})
+    };
+  }
 })();
 </script>
